@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.DS_Store
+# 데이터는 절대 저장소에 넣지 않는다 (마스터·사진·채팅·완성본)
+*.pptx
+*.pdf
+*.jpg
+*.jpeg
+*.png
+*.txt
+*.zip

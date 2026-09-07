@@ -1,0 +1,12 @@
+{
+  "name": "jaunsi",
+  "displayName": "자운시 주간 PPT",
+  "version": "1.0.0",
+  "description": "높은뜻광성교회 청년마을 자운시 주간 PPT 빌더. 카톡 export(사진+제목)와 외부 PPT를 마스터 템플릿에 합쳐 PowerPoint 복구창 없이 열리는 주간 PPTX를 만든다. 스킬: /jaunsi:setup(환경 점검) · /jaunsi:ppt(주간 빌드) · /jaunsi:slim(마스터 용량 축소)",
+  "author": {
+    "name": "kojh0111",
+    "url": "https://github.com/kojh0111"
+  },
+  "repository": "https://github.com/kojh0111/jaunsi-plugin",
+  "keywords": ["pptx", "powerpoint", "church", "korean"]
+}
