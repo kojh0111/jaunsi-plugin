@@ -26,7 +26,8 @@ https://claude.com/claude-code 안내대로 설치하고 로그인합니다. 본
 /plugin marketplace add kojh0111/jaunsi-plugin
 /plugin install jaunsi@jaunsi-plugin
 ```
-업데이트는 `/plugin update jaunsi@jaunsi-plugin` 한 줄입니다. 코드는 항상 이 저장소의 최신 버전을 따릅니다.
+업데이트는 `/plugin update jaunsi@jaunsi-plugin` 한 줄입니다.
+`church_pptx` 폴더에서만 쓰이게 하려면 그 폴더에서 `claude plugin install jaunsi@jaunsi-plugin --scope project` 로 설치합니다(설정이 `church_pptx/.claude/settings.json` 에 기록됨). 코드는 항상 이 저장소의 최신 버전을 따릅니다.
 
 ### 3. 데이터 폴더 준비 → 환경 점검
 전임자에게 `church_pptx` 폴더(아래 구조)를 받아 원하는 위치에 둡니다.
