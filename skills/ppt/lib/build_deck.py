@@ -3,7 +3,7 @@
 """
 build_deck.py — 자운시 주간 PPT 빌더 (순수 python stdlib: zipfile/xml/re)
 
-검증된 /tmp/build_final.py 로직을 config.json 으로 일반화.
+config.json 하나로 마스터 템플릿 + 사진 그리드 + 외부 PPT 를 조립해
 PowerPoint "복구" 창 없이 열리는 PPTX 를 생성한다.
 
 사용법:
@@ -17,9 +17,9 @@ config.json 스키마:
   "work_dir":   "/abs/<날짜>/.work_photos", # (선택) 리사이즈 임시폴더. 기본 output 옆
   "resize":  true,                          # magick 으로 사전 리사이즈 여부
 
-  "templates": {                            # 마스터 내 템플릿 슬라이드/레이아웃 번호
+  "templates": {                            # 마스터 내 템플릿 슬라이드 번호 (inspect_master.py 로 확인)
     "cover":1, "intro":2, "newfamily":3, "grid":4, "end":5,
-    "layout_cover":30, "layout_title":33
+    "layout_cover":30, "layout_title":33      # 생략 시 cover/intro 슬라이드의 rels 에서 자동 검출
   },
 
   "replacements": {                         # <a:t>OLD</a:t> -> <a:t>NEW</a:t>
@@ -66,7 +66,7 @@ CT = {"slide":"application/vnd.openxmlformats-officedocument.presentationml.slid
 def esc(s): return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
 def relpath(part): return posixpath.join(posixpath.dirname(part), "_rels", posixpath.basename(part)+".rels")
 def resolve(part, tgt):
-    # 절대경로 Target("/ppt/...")도 허용 — 일부 생성기(Canva 등)가 이렇게 쓴다
+    # 절대경로 Target("/ppt/...")도 허용 — 일부 생성기(Canva 등)가 이렇게 쓴다; 상대경로로만 풀면 파일을 못 찾아 복구창
     if tgt.startswith("/"): return posixpath.normpath(tgt.lstrip("/"))
     return posixpath.normpath(posixpath.join(posixpath.dirname(part), tgt))
 
@@ -113,7 +113,7 @@ def main(cfg_path):
     T = cfg.get("templates", {})
     n_cover = T.get("cover", 1); n_intro = T.get("intro", 2)
     n_newfam = T.get("newfamily", 3); n_grid = T.get("grid", 4); n_end = T.get("end", 5)
-    LAY_COVER = T.get("layout_cover", 30); LAY_TITLE = T.get("layout_title", 33)
+    LAY_COVER = T.get("layout_cover"); LAY_TITLE = T.get("layout_title")
 
     R = cfg.get("replacements", {})
     CONTENT = cfg.get("content", [])
@@ -174,6 +174,15 @@ def main(cfg_path):
                 '<p:spPr><a:xfrm><a:off x="%d" y="%d"/><a:ext cx="%d" cy="%d"/></a:xfrm>'
                 '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>'
                 % (pid, pid, rid, x, y, w, h))
+
+    # ---- layout numbers: 마스터마다 다르므로 미지정 시 템플릿 슬라이드의 rels 에서 읽는다 ----
+    def slide_layout(n):
+        rp = "ppt/slides/_rels/slide%d.xml.rels" % n
+        m = re.search(r'Target="[^"]*slideLayout(\d+)\.xml"', data[rp].decode("utf-8")) if rp in data else None
+        if not m: raise RuntimeError("slide%d 의 레이아웃을 찾지 못함 — templates.layout_* 를 명시하세요" % n)
+        return int(m.group(1))
+    if LAY_COVER is None: LAY_COVER = slide_layout(n_cover)
+    if LAY_TITLE is None: LAY_TITLE = slide_layout(n_intro)
 
     # ---- extract template slides ----
     s_grid = data["ppt/slides/slide%d.xml"%n_grid].decode("utf-8")
@@ -247,8 +256,8 @@ def main(cfg_path):
         content_slides.append((body.encode(), (rels+"</Relationships>").encode()))
 
     # ================= import external sources =================
-    # 외부 PPT 파트 번호는 마스터의 기존 최대값+1 부터 (하드코딩 금지 — 260906: 가을 마스터가 레이아웃 35개라
-    # 고정값 35 가 slideLayout35 를 덮어써 두 마스터가 한 레이아웃을 공유 → 복구창)
+    # 외부 PPT 파트(마스터/레이아웃/테마/폰트) 번호는 마스터의 기존 최대값+1 부터 동적으로 부여한다.
+    # 고정 시작값을 쓰면 마스터의 기존 파일을 덮어써 한 레이아웃을 두 마스터가 공유하게 되고 복구창이 뜬다.
     def _next(pattern):
         nums=[int(m.group(1)) for n in data for m in [re.match(pattern,n)] if m]
         return (max(nums)+1) if nums else 1

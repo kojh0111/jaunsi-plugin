@@ -34,24 +34,9 @@ argument-hint: "[날짜 예:260614]"
 도구: `python3`(stdlib만), `magick`(이미지 리사이즈/식별), `qlmanage`(미리보기, mac 전용). pip/uv 불필요.
 모든 lib 경로는 `${CLAUDE_PLUGIN_ROOT}/skills/ppt/lib/` 기준(플러그인 설치 폴더 — Claude 가 실제 경로로 치환해 준다).
 
-### 환경(OS)별 참고 — Windows 에서 실행할 때
-이 스킬 본문의 명령 예시는 macOS 기준이다. Windows(PowerShell)에서는 아래로 치환해 실행할 것:
-- `python3 ...` → `python ...` (`python` 이 없다고 뜨면 `py ...`).
-  Python 자체가 없으면 `winget install Python.Python.3.12` 로 설치 후 **터미널 재시작**.
-- `magick` 이 없으면 `winget install ImageMagick.ImageMagick` 후 터미널 재시작.
-- `qlmanage`(미리보기)는 mac 전용 — Windows 에서는 아래 PowerPoint COM 의 `Export` PNG 로
-  핵심 슬라이드만 뽑아 보여주거나, 여의치 않으면 미리보기를 생략하고 경로만 보고한다.
-- 4.5절의 AppleScript(PowerPoint→PDF)는 Windows 에서 PowerShell COM 으로 대체:
-  ```powershell
-  $pp = New-Object -ComObject PowerPoint.Application
-  $pres = $pp.Presentations.Open("<원본.pptx 절대경로>", $true)   # ReadOnly
-  $pres.SaveAs("<출력.pdf 절대경로>", 32)                        # 32 = ppSaveAsPDF
-  # 또는 페이지별 PNG 직접 추출(pdftoppm 불필요): $pres.Export("<png폴더>", "PNG", 3200, 1800)
-  $pres.Close(); $pp.Quit()
-  ```
-  `Export` 로 PNG 를 바로 뽑았다면 `pdftoppm` 단계는 건너뛴다(파일명 순서만 pg-01.. 형식으로 정리).
-- `unzip -p` → `python -c` + zipfile 등 동등한 수단으로 대체. `cp` → `Copy-Item`.
-- 그 외 파이썬 lib 스크립트(preflight/parse_chat/build_deck/make_imgdeck/validate)는 stdlib 만 쓰므로 OS 무관.
+**Windows 에서 실행할 때**: 본문 명령 예시는 macOS 기준이다. `python3`→`python`, AppleScript→PowerPoint COM,
+`qlmanage`→COM `Export` PNG 로 치환한다. 치환표는 `/jaunsi:setup` 스킬(`skills/setup/SKILL.md`)의
+"Windows 치환표" 절에 있다. 파이썬 lib 스크립트는 stdlib 만 쓰므로 OS 무관.
 
 ---
 
@@ -62,7 +47,8 @@ argument-hint: "[날짜 예:260614]"
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/ppt/lib/preflight.py" [--date <YYMMDD>]
 ```
 - 인자 없으면 **다가오는 일요일**로 자동 결정(오늘이 일요일이면 오늘). 인자 주면 그 날짜.
-- `<날짜>/`, `images/`, `ppts/`, `master/` 생성 + 체크리스트 JSON 출력.
+- `<날짜>/`, `images/`, `ppts/`, `master/` 생성 + 체크리스트 JSON 출력. 프로젝트에 `rotation.json` 이 없으면
+  플러그인의 `rotation.default.json` 을 복사해 만든다(JSON 의 `rotation_created:true`).
 - 날짜 폴더에 카톡 export 가 **zip/폴더째로** 들어와 있으면 자동 분류한다
   (txt → 직속, 이미지 → `images/`, pptx → `ppts/`; 결과는 JSON 의 `normalized` 에 표시).
   사용자에게는 "압축 풀 필요 없이 통째로 넣어도 된다"고 안내.
@@ -81,14 +67,25 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/ppt/lib/preflight.py" [--date <YYMMDD>]
 > 절대 사용자에게 "명령을 다시 입력하라"고 떠넘기지 말 것 — `넣었음` 게이트로 그 자리에서 재개.
 - `ready:true` 가 되면 다음 단계로.
 
-### 2. 마스터 선택 (AskUserQuestion)
+### 2. 마스터 선택 (AskUserQuestion) → 마스터 구조 확인
 - `preflight` 의 `masters` 목록을 **선택지로** 제시 → 사용자가 하나 선택.
+  (`.bak`·`원본백업` 같은 백업 파일은 선택지에서 제외하고, 이름에 계절이 있으면 현재 계절을 추천.)
 - 목록에 없고 외부 경로를 주면 그 파일을 `master/` 로 **복사**한 뒤 선택.
   ```bash
   cp "<외부경로>" master/
   ```
 - `master/` 가 비어 있으면 1단계와 동일한 **`넣었음` 게이트**:
   "`master/` 폴더에 템플릿 .pptx 를 넣어주세요" 안내 → `넣었음` 누르면 다시 `ls`/preflight 로 목록 갱신.
+
+**마스터 구조 확인(필수)** — 마스터마다 레이아웃 번호와 텍스트 run 분할이 다르다. 추측하지 말고 확인한다:
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/ppt/lib/inspect_master.py" "master/<선택한 마스터>.pptx"
+```
+- `templates_suggest` 를 config.json 의 `templates` 로 그대로 쓴다
+  (슬라이드 1~5 = 표지/정리정돈/새가족/사진그리드/끝, `layout_cover`=표지 레이아웃, `layout_title`=정리정돈 레이아웃).
+- `slides[0].runs`(표지) 와 `slides[1].runs`(정리정돈) 의 run 목록을 메모해 둔다 — 3.5·5단계 치환 쌍은
+  **이 run 문자열과 정확히 일치**해야 적용된다(예: 표지 날짜가 `2024.10` + `.20.` 두 run 으로 나뉘어 있으면
+  치환도 두 쌍으로 만든다).
 
 ### 3. 카톡 파싱 → 제목·사진수 후보 제시
 ```bash
@@ -106,16 +103,18 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/ppt/lib/parse_chat.py" "<날짜>/<그.txt>
 
 intro(2번) 슬라이드의 "정리정돈 담당 청년부"는 **매월 바뀐다**. 사용자에게 묻기 전에 스킬이 먼저 계산한다:
 
-1. `<프로젝트 루트>/rotation.json` 을 읽는다(없으면 preflight 가 플러그인의 `rotation.default.json` 을 복사해 만든다) — `order`(순환 순서), `anchor`(기준 월=담당), `overrides`(예외).
+1. `<프로젝트 루트>/rotation.json` 을 읽는다 — `order`(순환 순서), `anchor`(기준 월=담당), `overrides`(예외).
 2. 대상 월의 담당 = `order[(anchor.team의 index + anchor.month부터의 개월 차) % len(order)]`.
    `overrides`에 대상 월(`YYYY-MM`)이 있으면 그 값을 우선한다.
-   예: anchor 2026-06=1청년부 → 7월=2청년부, 8월=3청년부, 9월=신혼청, 10월=1청년부.
+   예: anchor 2026-06=1청년부, order 가 1청년부→2청년부→3청년부→신혼청 이면 7월=2청년부, 8월=3청년부, 9월=신혼청, 10월=1청년부.
 3. `replacements.intro` 치환 쌍을 구성한다. 치환은 `build_deck.py`의 `apply_repl`이
-   **`<a:t>OLD</a:t>` run 전체 일치**로 처리하므로 run 단위로 짝을 만든다.
-   `master/자운시 여름.pptx` intro(slide2)의 run 구조: `2`(청년부 번호) · `청년부` · `24`(연도) · `년 ` · `7`(월) · `월 정리정돈`
-   - 예) 2026년 8월 = 3청년부: `[["2","3"], ["24","26"], ["7","8"]]`
-   - 예) 담당이 신혼청인 달: `[["2","신혼"], ["청년부","청"], ["24","26"], ["7","9"]]`
+   **`<a:t>OLD</a:t>` run 전체 일치**로 처리하므로 2단계에서 확인한 run 단위로 짝을 만든다.
+   intro 슬라이드의 전형적 run 구조: `N`(청년부 번호) · `청년부` · `YY`(연도) · `년 ` · `M`(월) · `월 정리정돈`
+   - 예) 마스터 run 이 `2`,`청년부`,`24`,`년 `,`7`,`월 정리정돈` 이고 2026년 8월 = 3청년부:
+     `[["2","3"], ["24","26"], ["7","8"]]`
+   - 예) 담당이 신혼청인 달(2026년 9월): `[["2","신혼"], ["청년부","청"], ["24","26"], ["7","9"]]`
    연도 치환(`24`→`26`)만 하고 월·청년부 번호를 안 바꾸는 실수 금지.
+   짧은 run(`1`,`2` 같은 한 글자)은 같은 슬라이드의 다른 run 과 겹칠 수 있으니 치환 쌍 3번째 값으로 횟수를 제한할 수 있다(`["1","3",1]`).
 4. 계산 결과를 사용자에게 **확인만** 받는다: "이번 달(7월) 정리정돈 = 2청년부 맞나요?"
    - 맞으면 진행. 틀리면 사용자가 말한 담당으로 반영하고, **프로젝트 `rotation.json`의 `overrides`에
      `"YYYY-MM": "N청년부"` 로 기록**해 다음에 같은 오류가 반복되지 않게 한다.
@@ -128,7 +127,7 @@ intro(2번) 슬라이드의 "정리정돈 담당 청년부"는 **매월 바뀐�
    - 그리드는 **최대 4장**. 5장 이상이면 **같은 제목으로 4장씩 분할**(마지막 슬라이드에 나머지).
    - 세로사진 위주 슬라이드는 `layout:"row"`(한 줄 가로 배치)를 제안할 것.
    - **한 줄 원칙**: 콘텐츠 제목·알약 라벨은 한 줄이 기본. 긴 제목이 줄바꿈/넘침될 것 같으면
-     **글자 크기를 임의로 줄이지 말고** 사용자에게 먼저 보고해 문구를 조정받는다(260726 교훈).
+     **글자 크기를 임의로 줄이지 말고** 사용자에게 먼저 보고해 문구를 조정받는다.
 2. **외부 PPT 병합 순서** — 외부 PPT 의 **기본 위치는 콘텐츠(사진) 슬라이드 뒤, `end` 앞**이다.
    사용자에게는 외부 PPT 들끼리의 순서만 확인하고, 다른 위치를 명시적으로 요구할 때만 바꾼다.
 3. **PPT마다 구분 알약(divider) 넣을지 + 텍스트** — 각 외부 PPT 앞에 알약 슬라이드를
@@ -137,7 +136,7 @@ intro(2번) 슬라이드의 "정리정돈 담당 청년부"는 **매월 바뀐�
 4. **캔버스 크기 다른 외부 PPT** — `unzip -p <ppt> ppt/presentation.xml | grep sldSz` 로 확인 후:
    - 슬라이드가 **이미지·사진뿐**이거나 **확대**(마스터가 더 큼)면 기존 `scale` 병합 OK.
    - **텍스트가 있는데 축소**해야 하면 `scale` 금지 — 그룹 축소는 도형만 줄이고 **글자 크기를
-     안 줄여서 레이아웃이 전부 깨진다**(260816 재정팀 사례). 아래 "이미지판 변환" 절차로 병합할 것.
+     안 줄여서 레이아웃이 전부 깨진다**. 아래 "이미지판 변환" 절차로 병합할 것.
    - OLE 임베드(엑셀 표 등, `ppt/embeddings/*.bin`)가 있는 PPT 도 rel 이 끊겨 복구 원인이 되므로
      이미지판 경로가 안전하다.
 
@@ -172,24 +171,28 @@ intro(2번) 슬라이드의 "정리정돈 담당 청년부"는 **매월 바뀐�
 
 ### 5. config.json 작성 → 빌드
 4단계 결과로 `<날짜>/config.json` 작성(스키마는 `lib/build_deck.py` 상단 docstring 참고).
+`templates` 는 2단계 `templates_suggest`, `replacements.cover` 는 2단계 표지 run 기준으로 만든다
+(표지 원본 날짜 run → 이번 주 일요일 날짜; run 이 둘로 나뉘어 있으면 두 쌍).
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/ppt/lib/build_deck.py" "<날짜>/config.json"
 ```
 - 사진은 빌더가 `magick -auto-orient -resize 2000x2000> -strip` 로 사전 리사이즈
   (EXIF 회전 보정 + 용량↓) 후 실제 비율로 fit-contain 배치.
+- 빌드 후 `unzip -p <완성.pptx> ppt/slides/slide1.xml | grep -o '<a:t>[^<]*</a:t>'` 로 표지·intro(slide2) 치환이
+  실제로 반영됐는지 확인한다. 치환이 안 됐으면 run 문자열이 다른 것이니 2단계 결과로 되돌아가 쌍을 고친다.
 
 ### 6. 복구방지 검증 (모두 통과해야 산출 인정)
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/ppt/lib/validate.py" "<날짜>/<날짜>_자운시 PPT_완성.pptx"
 ```
 - 8개 게이트 전부 `ok:true` 여야 함. 하나라도 실패면 **중단 + 리포트** 후 원인 수정 재빌드.
-- **게이트는 "복구 없이 열림"만 보장하고 "제대로 보임"은 보장하지 않는다**(260816 교훈).
+- **게이트는 "복구 없이 열림"만 보장하고 "제대로 보임"은 보장하지 않는다**.
   외부 PPT 를 scale 병합했다면 병합된 슬라이드 1~2장을 렌더링해 **직접 눈으로 확인**할 것:
   4.5절 1~2단계(PowerPoint→PDF→pdftoppm)로 해당 페이지만 뽑아 Read 로 검사.
   완성본이 대용량이라 PDF 저장이 실패하면, 4.5절 3단계에서 소스 이미지판을
   이미 눈으로 확인했는지로 갈음한다.
-- **PowerPoint 실제 열림 테스트(필수, 게이트와 별도)** — 게이트가 못 잡는 손상(260906 레이아웃 공유 사례)이
-  있으므로 산출물을 PowerPoint 로 직접 열어 판정한다. 복구창이 뜨면 아래 스크립트가 **시간초과(exit 124)**
+- **PowerPoint 실제 열림 테스트(필수, 게이트와 별도)** — 게이트가 못 잡는 손상이 있을 수 있으므로
+  산출물을 PowerPoint 로 직접 열어 판정한다. 복구창이 뜨면 아래 스크립트가 **시간초과(exit 124)**
   또는 **`-50 매개변수 오류`** 로 실패한다. 슬라이드 수가 출력되고 exit 0 이어야 통과.
   ```bash
   pkill -x "Microsoft PowerPoint"; sleep 2
@@ -212,33 +215,36 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/ppt/lib/validate.py" "<날짜>/<날짜>_�
 
 ---
 
-## 복구가 왜 떴고 무엇으로 막는가 (반드시 기억)
+## 복구가 왜 뜨고 무엇으로 막는가 (반드시 기억)
 
-지난 수작업에서 PowerPoint "복구" 창이 떴던 원인과, 빌더/검증기가 이를 어떻게 한 방에 막는지:
+PowerPoint "복구" 창은 패키지 내부 참조가 어긋날 때 뜬다. 빌더/검증기가 막는 원인과 처리:
 
-| 복구 원인 | 자동 차단 위치 | 게이트 |
-|---|---|---|
-| **여러 마스터의 `sldLayoutId @id` 충돌**(외부 PPT 병합 시 ID 겹침) — 가장 흔한 복구 원인 | `build_deck.py` 가 전 마스터 레이아웃 ID를 2147483800+ 로 **전역 재번호** | 2 |
-| 본문 `r:id`/`r:embed` 가 .rels 에 없음(dangling) | 소스 import 시 .rels 리매핑, notesSlide/printerSettings 등 미복사 타겟 drop | 3 |
-| .rels Target 파일이 실제로 없음 / 중복 rId | 미디어/레이아웃/테마 통째 복사 + 미참조 미디어 prune | 4 |
-| `[Content_Types]` 미커버(특히 svg Default 누락) | slide/master/layout/theme Override 추가, svg 있으면 Default 추가 | 5 |
-| 슬라이드 내 `cNvPr @id` 중복 | 사진 도형 id 를 1000+ 증가 카운터로 부여 | 6 |
-| `sldIdLst` ↔ presentation.rels 불일치(고아/누락 슬라이드) | 슬라이드 rId 를 rIdS1..N 으로 일괄 재배선 | 7 |
-| **외부 PPT 레이아웃/테마/마스터 파일 번호가 마스터 기존 파일과 충돌**(가을 마스터=레이아웃 35개인데 고정값 35부터 부여 → 한 레이아웃을 두 마스터가 공유; 260906) | 시작 번호를 마스터의 최대값+1 로 **동적 계산** | 8 |
+| 현상(복구 원인) | 원인 | 빌더 처리 | 게이트 |
+|---|---|---|---|
+| **여러 마스터의 `sldLayoutId @id` 충돌** — 가장 흔한 원인 | 외부 PPT 병합 시 레이아웃 ID 가 마스터와 겹침 | 전 마스터 레이아웃 ID를 2147483800+ 로 **전역 재번호** | 2 |
+| 본문 `r:id`/`r:embed` 가 .rels 에 없음(dangling) | 소스 import 시 rId 만 옮기고 rels 를 안 옮김 | .rels 리매핑, notesSlide/printerSettings 등 미복사 타겟 drop | 3 |
+| .rels Target 파일이 실제로 없음 / 중복 rId | 미디어·레이아웃·테마를 부분만 복사 | 통째 복사 + 미참조 미디어 prune | 4 |
+| `[Content_Types]` 미커버(특히 svg Default 누락) | 새 파트 추가 후 타입 등록 누락 | slide/master/layout/theme Override 추가, svg 있으면 Default 추가 | 5 |
+| 슬라이드 내 `cNvPr @id` 중복 | 사진 도형을 같은 id 로 여러 개 삽입 | 사진 도형 id 를 1000+ 증가 카운터로 부여 | 6 |
+| `sldIdLst` ↔ presentation.rels 불일치(고아/누락 슬라이드) | 슬라이드 rId 를 손으로 관리 | 슬라이드 rId 를 rIdS1..N 으로 일괄 재배선 | 7 |
+| **한 레이아웃/테마/마스터 파일을 두 마스터가 공유** | 외부 PPT 파트 번호를 고정 시작값으로 부여해 마스터의 기존 파일을 덮어씀 | 시작 번호를 마스터의 최대값+1 로 **동적 계산** | 8 |
 
 폰트: 외부 PPT의 **임베드 폰트(embeddedFontLst)** 를 `.fntdata` 통째로 import 하고
 presentation.xml 에 다시 연결 → "폰트 그대로" 유지(재설치/치환 불필요).
 
-검증된 원본 로직은 `lib/build_deck.py` 에 일반화되어 있다. 절대 이 8개 보정을 빼지 말 것 —
+이 8개 보정은 `lib/build_deck.py` 에 들어 있다. 절대 이 8개 보정을 빼지 말 것 —
 하나라도 빠지면 복구 창이 돌아온다.
 
 ---
 
 ## config.json 핵심 필드 (요약)
 - `master`, `output`, `photos_dir` — 절대경로.
-- `replacements.cover` — 표지 날짜 알약: `[["2024.07.07.","<YYYY.MM.DD.>"]]` (마스터 원본 날짜 → 이번 주).
+- `templates` — 2단계 `inspect_master.py` 의 `templates_suggest`. `layout_cover`/`layout_title` 를 생략하면
+  빌더가 표지/정리정돈 슬라이드의 rels 에서 자동 검출한다.
+- `replacements.cover` — 표지 날짜: 마스터 원본 날짜 run → 이번 주 날짜. run 이 하나면 `[["2024.07.07.","2026.06.07."]]`,
+  둘로 나뉘어 있으면 `[["2024.10","2026.09"], [".20.",".06."]]` 처럼 run 마다 한 쌍.
 - `replacements.intro` — 정리정돈 슬라이드 치환. **연도 숫자만이 아니라 3.5단계에서 계산한
-  월·담당 청년부까지 반영할 것** (예: `[["24","26"], ["7월 정리정돈 2청년부 원본문구","이번달 문구"]]`).
+  월·담당 청년부까지 반영할 것**.
 - `content` — `[{title, photos:[파일명...]}]` (제목당 1슬라이드, 사진 1/2/3/4 그리드).
   항목에 `"layout":"row"` 를 주면 한 줄 가로(저스티파이드) 배치 — 세로사진 3~4장일 때 권장.
 - `sources` — `[{path, scale|null}]` 외부 PPT. `scale` 은 **원본 캔버스 크기** `[cx,cy]`.
@@ -258,6 +264,6 @@ presentation.xml 에 다시 연결 → "폰트 그대로" 유지(재설치/치�
 ---
 
 ## 검증(스킬 자체 재현 테스트)
-기존 260607 자료로 재현 가능: `master/자운시 여름.pptx`, `260607/images`(22장),
-`260607/ppts`(새가족수료·양육팀·북메이트 3개), 카톡 txt 배치 후 위 흐름 실행 →
-28장 PPTX 가 복구 없이 열리고 `validate.py` 전 항목 통과해야 한다.
+임의의 한 주 자료(마스터 1개, 카톡 txt, 사진 여러 장, 외부 PPT 1~3개)로 위 흐름을 실행해
+장수가 `5 + 콘텐츠 슬라이드 + 알약 + 외부 PPT 슬라이드` 와 일치하고, `validate.py` 8게이트 전부 통과,
+PowerPoint 열림 테스트 exit 0 이면 재현 성공이다.

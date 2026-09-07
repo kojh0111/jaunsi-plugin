@@ -10,7 +10,7 @@ argument-hint: "[대상.pptx 경로]"
 
 마스터 템플릿 같은 pptx가 너무 클 때, **어디서 용량이 나오는지 검증**하고
 **화면에 보이는 픽셀은 그대로 둔 채** 안전하게 줄인다.
-2026-08-19 `자운시 여름.pptx` 109MB→19MB 슬림화에서 검증된 절차를 그대로 따른다.
+마스터가 100MB 급으로 커진 경우에도 20MB 안팎까지 줄어드는 절차다.
 
 > 검증 요청 시에만 사용. 매주 PPT 빌드에 끼워넣지 말 것.
 > Windows 에서는 `python3`→`python`, AppleScript 열림 확인→PowerPoint COM(`New-Object -ComObject PowerPoint.Application`)으로 치환. `magick` 필요(`winget install ImageMagick.ImageMagick`).
@@ -41,7 +41,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/slim/lib/slim_pptx.py" analyze "<대상.pp
 
 ### 2. 보호 목록 결정 + 사용자 확인 (AskUserQuestion)
 - **슬라이드가 실제 사용하는 레이아웃**(`used_layouts`)의 미디어는 보수적으로 `--keep` 에 넣는다
-  (자운시 마스터에서는 layout30/33의 image20 등을 보호했음).
+  (표지·제목 레이아웃의 배경 이미지처럼 매주 화면에 나오는 것).
 - 진행 여부를 확인받고 시작. 원본은 절대 덮어쓰지 않고 사본을 만든다고 안내.
 
 ### 3. 적용

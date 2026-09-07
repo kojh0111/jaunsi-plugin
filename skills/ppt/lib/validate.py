@@ -156,7 +156,8 @@ def validate(path):
         "%d slides 1:1" % len(sld_rids))
 
     # ---- 8. 레이아웃 소유권: 각 slideLayout 은 정확히 한 마스터의 rels 에만 등장하고,
-    #         그 레이아웃의 rels 가 가리키는 slideMaster 가 바로 그 마스터여야 함 (260906 가을 마스터 충돌 교훈) ----
+    #         그 레이아웃의 rels 가 가리키는 slideMaster 가 바로 그 마스터여야 함.
+    #         (외부 PPT 병합 시 파트 번호가 겹쳐 한 레이아웃을 두 마스터가 공유하면 다른 게이트는 통과해도 복구창이 뜬다) ----
     lay_owner = {}
     bad_own = []
     for n in names:

@@ -6,7 +6,7 @@ slim_pptx.py — PPTX 용량 분석·슬림화 (stdlib + magick)
 analyze: 미디어별 크기/해상도/투명도/참조처를 조사해 절감 후보를 JSON으로 보고.
 apply:   안전 규칙에 따라 변환·정리한 사본(<원본>.슬림.pptx)을 만든다. 원본은 건드리지 않는다.
 
-안전 규칙(2026-08-19 자운시 마스터 슬림화에서 검증):
+안전 규칙(화면 픽셀을 바꾸지 않는 변환만 수행):
   - 불투명(opaque) PNG ≥ min-size → JPEG q<quality>, 장변 max-edge 상한.
     실제 절감이 30% 미만이면 원본 유지. 투명도 있는 PNG는 절대 변환하지 않음.
   - JPEG ≥ min-size 이고 장변 > max-edge → 다운스케일 재압축.
