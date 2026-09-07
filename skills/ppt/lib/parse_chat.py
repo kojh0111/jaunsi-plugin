@@ -12,8 +12,10 @@ parse_chat.py — 카톡 채팅 export(.txt) → (시간, 발신자, 제목, 사
 메뉴/링크/무제 등은 maybe 플래그로 표시.
 
 사용법:
-    python3 parse_chat.py <chat.txt> [--since YYYY.M.D]
-    --since 생략 시 직전 일요일(오늘이 일요일이면 지난주 일요일)부터 필터.
+    python3 parse_chat.py <chat.txt> --date YYMMDD [--since YYYY.M.D]
+    --date  : 대상 주일(YYMMDD). --since 생략 시 이 날짜의 7일 전(직전 일요일)부터 필터한다.
+              대상 날짜가 아니라 "실행하는 날"을 기준으로 잡으면 토요일 사진이 잘려 나갈 수 있으므로 항상 넘긴다.
+    --since : 필터 시작일 직접 지정. --date 도 --since 도 없으면 오늘 기준 직전 일요일.
 출력: JSON  { "since": "YYYY.M.D", "candidates": [ {time,sender,title,photos,maybe,reason}, ... ] }
 """
 import sys, re, json, argparse, datetime
@@ -88,10 +90,17 @@ def parse(path, since=None):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("chat")
+    ap.add_argument("--date", default=None, help="대상 주일 YYMMDD (since 기본값 = 이 날짜-7일)")
     ap.add_argument("--since", default=None,
                     help="YYYY.M.D 이후만. 생략 시 직전 일요일부터")
     args = ap.parse_args()
-    since = args.since or last_sunday().strftime("%Y.%m.%d")
+    if args.since:
+        since = args.since
+    elif args.date:
+        d = datetime.datetime.strptime(args.date, "%y%m%d").date()
+        since = (d - datetime.timedelta(days=7)).strftime("%Y.%m.%d")
+    else:
+        since = last_sunday().strftime("%Y.%m.%d")
     print(json.dumps(parse(args.chat, since), ensure_ascii=False, indent=2))
 
 

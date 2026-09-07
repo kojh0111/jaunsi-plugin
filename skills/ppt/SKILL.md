@@ -89,9 +89,11 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/ppt/lib/inspect_master.py" "master/<선택
 
 ### 3. 카톡 파싱 → 제목·사진수 후보 제시
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/ppt/lib/parse_chat.py" "<날짜>/<그.txt>" [--since <YYYY.M.D>]
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/ppt/lib/parse_chat.py" "<날짜>/<그.txt>" --date <날짜> [--since <YYYY.M.D>]
 ```
-- 채팅 txt 는 수년치 누적이다. `--since` 생략 시 **직전 일요일부터** 자동 필터(기본값).
+- 채팅 txt 는 수년치 누적이다. `--date <날짜>` 를 **반드시** 넘긴다 — `--since` 생략 시 대상 주일의 7일 전(직전 일요일)부터
+  필터한다. 실행하는 날을 기준으로 잡으면 전날(토요일) 사진이 잘려 나가므로 실행일 기준을 쓰지 않는다.
+- 후보가 0건이거나 카톡 원문의 사진 메시지보다 적으면 `--since` 를 며칠 앞당겨 다시 실행한다.
 - "사진"/"사진 N장" + 다음 줄 제목 규칙으로 후보 추출(JSON).
 - 사진은 `magick`+`montage` 로 몽타주 이미지를 만들어 **SendUserFile 로 먼저 보여준다**.
 - `maybe:true`(무제·다른발신자) 후보는 채팅 원문 앞뒤 줄을 직접 읽어 교차확인
@@ -104,8 +106,11 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/ppt/lib/parse_chat.py" "<날짜>/<그.txt>
 intro(2번) 슬라이드의 "정리정돈 담당 청년부"는 **매월 바뀐다**. 사용자에게 묻기 전에 스킬이 먼저 계산한다:
 
 1. `<프로젝트 루트>/rotation.json` 을 읽는다 — `order`(순환 순서), `anchor`(기준 월=담당), `overrides`(예외).
-2. 대상 월의 담당 = `order[(anchor.team의 index + anchor.month부터의 개월 차) % len(order)]`.
-   `overrides`에 대상 월(`YYYY-MM`)이 있으면 그 값을 우선한다.
+2. 대상 월의 담당을 스크립트로 계산한다(손 계산 금지):
+   ```bash
+   python3 "${CLAUDE_PLUGIN_ROOT}/skills/ppt/lib/rotation_calc.py" rotation.json <날짜>
+   ```
+   규칙: `overrides[YYYY-MM]` 우선, 없으면 `order[(anchor.team의 index + anchor.month부터의 개월 차) % len(order)]`.
    예: anchor 2026-06=1청년부, order 가 1청년부→2청년부→3청년부→신혼청 이면 7월=2청년부, 8월=3청년부, 9월=신혼청, 10월=1청년부.
 3. `replacements.intro` 치환 쌍을 구성한다. 치환은 `build_deck.py`의 `apply_repl`이
    **`<a:t>OLD</a:t>` run 전체 일치**로 처리하므로 2단계에서 확인한 run 단위로 짝을 만든다.
@@ -195,9 +200,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/ppt/lib/validate.py" "<날짜>/<날짜>_�
   산출물을 PowerPoint 로 직접 열어 판정한다. 복구창이 뜨면 아래 스크립트가 **시간초과(exit 124)**
   또는 **`-50 매개변수 오류`** 로 실패한다. 슬라이드 수가 출력되고 exit 0 이어야 통과.
   ```bash
-  pkill -x "Microsoft PowerPoint"; sleep 2
+  pkill -x "Microsoft PowerPoint"; sleep 3
+  osascript -e 'tell application "Microsoft PowerPoint" to activate'; sleep 5
   timeout 60 osascript -e 'tell application "Microsoft PowerPoint"
-  activate
   open POSIX file "<완성.pptx 절대경로>"
   delay 8
   set n to count of slides of active presentation
@@ -205,6 +210,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/ppt/lib/validate.py" "<날짜>/<날짜>_�
   return n
   end tell'; echo "exit=$?"
   ```
+  `-609 연결이 유효하지 않습니다` 는 앱이 아직 뜨기 전에 명령을 보낸 것이므로 파일 문제가 아니다 — 몇 초 기다렸다가 재시도한다.
   실패하면 **이분법으로 원인 분리**: 외부 PPT 제외 / 알약만 / 소스 하나만 변형 config 를 만들어 각각 빌드·열림
   테스트해 범위를 좁힌 뒤 원인을 고친다(원본 외부 PPT 단독 열림 여부도 같이 확인).
   Windows 는 PowerPoint COM `Presentations.Open` 이 예외를 던지는지로 판정.
@@ -265,5 +271,5 @@ presentation.xml 에 다시 연결 → "폰트 그대로" 유지(재설치/치�
 
 ## 검증(스킬 자체 재현 테스트)
 임의의 한 주 자료(마스터 1개, 카톡 txt, 사진 여러 장, 외부 PPT 1~3개)로 위 흐름을 실행해
-장수가 `5 + 콘텐츠 슬라이드 + 알약 + 외부 PPT 슬라이드` 와 일치하고, `validate.py` 8게이트 전부 통과,
+장수가 `4(표지·정리정돈·새가족·끝) + 콘텐츠 슬라이드 + 알약 + 외부 PPT 슬라이드` 와 일치하고, `validate.py` 8게이트 전부 통과,
 PowerPoint 열림 테스트 exit 0 이면 재현 성공이다.
