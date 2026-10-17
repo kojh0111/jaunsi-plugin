@@ -35,7 +35,8 @@ config.json 스키마:
     {"title":"또래모임", "photos":["가로1.jpeg","가로2.jpeg","세로.jpeg"], "layout":"side"}
   ],                                        # layout: "row"(한 줄 가로) | "side"(가로2 왼쪽 위아래 + 세로1 오른쪽)
 
-  "sources": [                              # 끼워넣을 외부 PPT
+  "sources": [                              # 끼워넣을 외부 PPT. scale 이 null 이면 캔버스 자동 감지
+                                            # (다르면 자동 축척, 텍스트 있는 축소는 중단 → 이미지판 사용)
     {"path":"/abs/new_family.pptx", "scale":null},
     {"path":"/abs/care.pptx",       "scale":null},
     {"path":"/abs/ad.pptx",         "scale":[12192000,6858000]}
@@ -101,6 +102,13 @@ def magick_dims(path):
     w, h = out.split()[:2]
     return int(w), int(h)
 
+def canvas_of(pres_xml):
+    # <p:sldSz cy=".." cx=".."> 처럼 속성 순서가 바뀐 파일도 있으므로 속성별로 읽는다
+    m = re.search(r'<p:sldSz\b[^>]*>', pres_xml)
+    if not m: return None
+    cx = re.search(r'\bcx="(\d+)"', m.group(0)); cy = re.search(r'\bcy="(\d+)"', m.group(0))
+    return (int(cx.group(1)), int(cy.group(1))) if cx and cy else None
+
 
 def main(cfg_path):
     cfg = json.load(open(cfg_path, encoding="utf-8"))
@@ -140,11 +148,11 @@ def main(cfg_path):
 
     # canvas size from master presentation.xml
     pres0 = data["ppt/presentation.xml"].decode("utf-8")
-    msz = re.search(r'<p:sldSz cx="(\d+)" cy="(\d+)"', pres0)
+    msz = canvas_of(pres0)
     if cfg.get("canvas"):
         W, H = cfg["canvas"]
     elif msz:
-        W, H = int(msz.group(1)), int(msz.group(2))
+        W, H = msz
     else:
         W, H = 13823950, 7775575
 
@@ -299,9 +307,11 @@ def main(cfg_path):
             if 'xmlns:a=' not in root: add+=' xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"'
             if 'xmlns:r=' not in root: add+=' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
             if add: xml=xml.replace(root, root[:-1]+add+">", 1)
+        # 가로세로 비율을 유지한 채 마스터 캔버스에 맞추고 가운데 정렬(비율이 다르면 늘이지 않고 여백)
+        sc=min(W/cx, H/cy); ew,eh=int(cx*sc),int(cy*sc)
         grp=('<p:grpSp><p:nvGrpSpPr><p:cNvPr id="90001" name="scalewrap"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>'
-             '<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="%d" cy="%d"/>'
-             '<a:chOff x="0" y="0"/><a:chExt cx="%d" cy="%d"/></a:xfrm></p:grpSpPr>'%(W,H,cx,cy))
+             '<p:grpSpPr><a:xfrm><a:off x="%d" y="%d"/><a:ext cx="%d" cy="%d"/>'
+             '<a:chOff x="0" y="0"/><a:chExt cx="%d" cy="%d"/></a:xfrm></p:grpSpPr>'%((W-ew)//2,(H-eh)//2,ew,eh,cx,cy))
         # <p:spTree xmlns:r=...> 처럼 속성이 붙은 경우도 매칭 (요소별 xmlns 선언 생성기 대응)
         xml,n=re.subn(r'(<p:spTree\b[^>]*>.*?</p:grpSpPr>)', lambda m:m.group(1)+grp, xml, count=1, flags=re.S)
         if n!=1: raise SystemExit("wrap_scale: spTree 를 찾지 못함 — scale 병합 불가")
@@ -318,6 +328,24 @@ def main(cfg_path):
         prx={rid:resolve("ppt/presentation.xml",tgt) for rid,typ,tgt,mode in parse_rels(s["ppt/_rels/presentation.xml.rels"].decode())}
         order=re.findall(r'<p:sldId\b[^>]*r:id="([^"]+)"', re.search(r'<p:sldIdLst>.*?</p:sldIdLst>',pres,re.S).group())
         src_slides=[prx[r] for r in order if r in prx and '/slides/' in prx[r]]
+        # 캔버스 자동 감지: scale 이 null/생략이면 원본 sldSz 를 읽어 마스터와 다를 때만 축척한다.
+        # 텍스트가 있는데 축소해야 하면 글자 크기가 안 줄어 레이아웃이 깨지므로 이미지판으로 넣으라고 중단한다.
+        ssz=canvas_of(pres)
+        if scale is None and ssz and ssz!=(W,H):
+            uses=[st for st in ASSEMBLY if st.get("type")=="source" and st.get("index")==si]
+            used=src_slides[1:] if uses and all(st.get("skip_first") for st in uses) else src_slides
+            has_text=any(re.search(r'<a:t\b[^>]*>[^<]*\S', s[p].decode("utf-8")) for p in used)
+            if has_text and (ssz[0]>W or ssz[1]>H):
+                raise SystemExit("source %d (%s): 캔버스 %dx%d 가 마스터 %dx%d 보다 크고 텍스트가 있음 — "
+                                 "축소 병합하면 글자 크기가 안 줄어 레이아웃이 깨진다. "
+                                 "이미지판(make_imgdeck.py)으로 바꿔 path 에 지정할 것"
+                                 % (si, os.path.basename(path), ssz[0], ssz[1], W, H))
+            scale=list(ssz)
+            print("source %d (%s): 캔버스 %dx%d → 마스터 %dx%d 자동 축척"
+                  % (si, os.path.basename(path), ssz[0], ssz[1], W, H), file=sys.stderr)
+        elif scale and ssz and tuple(scale)!=ssz:
+            print("경고: source %d (%s) 의 scale %s 가 실제 캔버스 %s 와 다름"
+                  % (si, os.path.basename(path), list(scale), list(ssz)), file=sys.stderr)
         themes=set()
         for m in masters:
             for rid,typ,tgt,mode in srels(m):
