@@ -31,8 +31,9 @@ config.json 스키마:
 
   "content": [                              # 제목 슬라이드(제목당 1장, 사진 1/2/4 그리드)
     {"title":"예배팀 클라이밍 모꼬지", "photos":["a.jpeg"]},
-    {"title":"6월 운영위",            "photos":["b.jpeg","c.jpeg"]}
-  ],
+    {"title":"6월 운영위",            "photos":["b.jpeg","c.jpeg"]},
+    {"title":"또래모임", "photos":["가로1.jpeg","가로2.jpeg","세로.jpeg"], "layout":"side"}
+  ],                                        # layout: "row"(한 줄 가로) | "side"(가로2 왼쪽 위아래 + 세로1 오른쪽)
 
   "sources": [                              # 끼워넣을 외부 PPT
     {"path":"/abs/new_family.pptx", "scale":null},
@@ -241,6 +242,20 @@ def main(cfg_path):
             cs=[]; xx=x0
             for wv in ws:
                 cs.append((xx,y0,wv,int(hrow))); xx+=wv+g
+        elif item.get("layout") == "side":
+            # 앞 2장은 왼쪽 열에 위아래로 쌓고 3번째(세로사진)는 오른쪽에 단독. 두 열 높이 동일, 가운데 정렬
+            if len(files) != 3:
+                raise ValueError("layout side 는 사진 3장 전용: %s (%d장)" % (title, len(files)))
+            g=300000
+            (w1,h1),(w2,h2),(w3,h3)=[photo_path(fn)[1] for fn in files]
+            kl=1/(h1/w1+h2/w2)                      # 왼쪽 열 폭 = (열 높이 - g) * kl
+            hc=min(RH, (RW-g+g*kl)/(kl+w3/h3))
+            wl=(hc-g)*kl; wr=hc*w3/h3
+            x0=LF+(RW-(wl+g+wr))/2; y0=TOP+(RH-hc)/2
+            ht=wl*h1/w1
+            cs=[(int(x0),int(y0),int(wl),int(ht)),
+                (int(x0),int(y0+ht+g),int(wl),int(hc-ht-g)),
+                (int(x0+wl+g),int(y0),int(wr),int(hc))]
         else:
             cs=cells(len(files))
         for k, fn in enumerate(files):
