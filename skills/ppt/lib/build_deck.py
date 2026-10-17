@@ -334,7 +334,10 @@ def main(cfg_path):
         if scale is None and ssz and ssz!=(W,H):
             uses=[st for st in ASSEMBLY if st.get("type")=="source" and st.get("index")==si]
             used=src_slides[1:] if uses and all(st.get("skip_first") for st in uses) else src_slides
-            has_text=any(re.search(r'<a:t\b[^>]*>[^<]*\S', s[p].decode("utf-8")) for p in used)
+            # 슬라이드 번호·날짜 같은 자동 필드(<a:fld>)는 본문 텍스트로 치지 않는다
+            has_text=any(re.search(r'<a:t\b[^>]*>[^<]*\S',
+                                   re.sub(r'<a:fld\b.*?</a:fld>', '', s[p].decode("utf-8"), flags=re.S))
+                         for p in used)
             if has_text and (ssz[0]>W or ssz[1]>H):
                 raise SystemExit("source %d (%s): 캔버스 %dx%d 가 마스터 %dx%d 보다 크고 텍스트가 있음 — "
                                  "축소 병합하면 글자 크기가 안 줄어 레이아웃이 깨진다. "
