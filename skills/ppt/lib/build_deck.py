@@ -287,7 +287,9 @@ def main(cfg_path):
         grp=('<p:grpSp><p:nvGrpSpPr><p:cNvPr id="90001" name="scalewrap"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>'
              '<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="%d" cy="%d"/>'
              '<a:chOff x="0" y="0"/><a:chExt cx="%d" cy="%d"/></a:xfrm></p:grpSpPr>'%(W,H,cx,cy))
-        xml=re.sub(r'(<p:spTree>.*?</p:grpSpPr>)', lambda m:m.group(1)+grp, xml, count=1, flags=re.S)
+        # <p:spTree xmlns:r=...> 처럼 속성이 붙은 경우도 매칭 (요소별 xmlns 선언 생성기 대응)
+        xml,n=re.subn(r'(<p:spTree\b[^>]*>.*?</p:grpSpPr>)', lambda m:m.group(1)+grp, xml, count=1, flags=re.S)
+        if n!=1: raise SystemExit("wrap_scale: spTree 를 찾지 못함 — scale 병합 불가")
         xml=xml.replace("</p:spTree>","</p:grpSp></p:spTree>",1)
         return xml
 
