@@ -10,7 +10,7 @@
       "name": "jaunsi",
       "source": "./",
       "description": "자운시 주간 PPT 빌더 — /jaunsi:setup, /jaunsi:ppt, /jaunsi:slim",
-      "version": "1.0.3"
+      "version": "1.0.4"
     }
   ]
 }
