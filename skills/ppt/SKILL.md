@@ -103,7 +103,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/ppt/lib/parse_chat.py" "<날짜>/<그.txt>
 
 ### 3.5 정리정돈 로테이션 계산 (intro 슬라이드)
 
-intro(2번) 슬라이드의 "정리정돈 담당 청년부"는 **매월 바뀐다**. 사용자에게 묻기 전에 스킬이 먼저 계산한다:
+intro(2번) 슬라이드의 "정리정돈 담당 청년부"는 **매월 바뀐다**. 사용자에게 묻기 전에 스킬이 먼저 계산한다.
+정리정돈 슬라이드는 **2번과 맨 마지막(끝 뒤) 두 곳**에 같은 내용으로 들어가는 것이 정상이다 —
+`assembly` 를 `{"type":"end"}` 뒤 `{"type":"intro"}` 로 끝내야 한다(5단계). 둘 다 같은 `replacements.intro` 가 적용된다.
 
 1. `<프로젝트 루트>/rotation.json` 을 읽는다 — `order`(순환 순서), `anchor`(기준 월=담당), `overrides`(예외).
 2. 대상 월의 담당을 스크립트로 계산한다(손 계산 금지):
@@ -180,12 +182,14 @@ intro(2번) 슬라이드의 "정리정돈 담당 청년부"는 **매월 바뀐�
 4단계 결과로 `<날짜>/config.json` 작성(스키마는 `lib/build_deck.py` 상단 docstring 참고).
 `templates` 는 2단계 `templates_suggest`, `replacements.cover` 는 2단계 표지 run 기준으로 만든다
 (표지 원본 날짜 run → 이번 주 일요일 날짜; run 이 둘로 나뉘어 있으면 두 쌍).
+`assembly` 는 반드시 `{"type":"end"}` 뒤에 `{"type":"intro"}` 를 두어 **정리정돈이 2번과 맨 끝 두 곳**에 들어가게 한다
+(끝에 없으면 빌더가 경고를 낸다).
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/ppt/lib/build_deck.py" "<날짜>/config.json"
 ```
 - 사진은 빌더가 `magick -auto-orient -resize 2000x2000> -strip` 로 사전 리사이즈
   (EXIF 회전 보정 + 용량↓) 후 실제 비율로 fit-contain 배치.
-- 빌드 후 `unzip -p <완성.pptx> ppt/slides/slide1.xml | grep -o '<a:t>[^<]*</a:t>'` 로 표지·intro(slide2) 치환이
+- 빌드 후 `unzip -p <완성.pptx> ppt/slides/slide1.xml | grep -o '<a:t>[^<]*</a:t>'` 로 표지·intro(slide2)·마지막 슬라이드(정리정돈) 치환이
   실제로 반영됐는지 확인한다. 치환이 안 됐으면 run 문자열이 다른 것이니 2단계 결과로 되돌아가 쌍을 고친다.
 
 ### 6. 복구방지 검증 (모두 통과해야 산출 인정)
@@ -271,8 +275,10 @@ presentation.xml 에 다시 연결 → "폰트 그대로" 유지(재설치/치�
   [{"type":"cover"},{"type":"intro"},{"type":"newfamily"},{"type":"content"},
    {"type":"divider","label":"새가족팀"},{"type":"source","index":0},
    {"type":"divider","label":"양육팀"},{"type":"source","index":1,"skip_first":true},
-   {"type":"source","index":2},{"type":"end"}]
+   {"type":"source","index":2},{"type":"end"},{"type":"intro"}]
   ```
+  - `intro`(정리정돈)는 **2번과 맨 끝(`end` 뒤) 두 곳** — 같은 슬라이드가 두 번 들어가는 것이 정상이다.
+    끝에 없으면 빌더가 경고를 낸다.
   - `source` 의 **기본 위치는 `content` 뒤, `end` 앞** — 사용자가 명시적으로 다른 위치를
     요구할 때만 바꾼다. `content` 앞에 두지 말 것.
   - `divider` 는 **선택** — 알약 안 넣을 PPT 앞에는 넣지 않으면 됨(4단계에서 사용자 확인).
@@ -282,5 +288,5 @@ presentation.xml 에 다시 연결 → "폰트 그대로" 유지(재설치/치�
 
 ## 검증(스킬 자체 재현 테스트)
 임의의 한 주 자료(마스터 1개, 카톡 txt, 사진 여러 장, 외부 PPT 1~3개)로 위 흐름을 실행해
-장수가 `4(표지·정리정돈·새가족·끝) + 콘텐츠 슬라이드 + 알약 + 외부 PPT 슬라이드` 와 일치하고, `validate.py` 8게이트 전부 통과,
+장수가 `5(표지·정리정돈·새가족·끝·정리정돈) + 콘텐츠 슬라이드 + 알약 + 외부 PPT 슬라이드` 와 일치하고, `validate.py` 8게이트 전부 통과,
 PowerPoint 열림 테스트 exit 0 이면 재현 성공이다.

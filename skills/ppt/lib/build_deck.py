@@ -52,7 +52,8 @@ config.json 스키마:
     {"type":"divider", "label":"양육팀"},
     {"type":"source",  "index":1, "skip_first":true},
     {"type":"source",  "index":2},
-    {"type":"end"}
+    {"type":"end"},
+    {"type":"intro"}                        # 정리정돈(intro)은 2번과 맨 끝 두 곳에 들어간다
   ]
 }
 """
@@ -128,6 +129,9 @@ def main(cfg_path):
     CONTENT = cfg.get("content", [])
     SOURCES = [(s["path"], s.get("scale")) for s in cfg.get("sources", [])]
     ASSEMBLY = cfg.get("assembly", [])
+    if ASSEMBLY and ASSEMBLY[-1].get("type") != "intro":
+        print('경고: assembly 마지막이 intro(정리정돈) 가 아닙니다 — 정리정돈은 2번과 맨 끝(end 뒤) 두 곳에 '
+              '들어가야 합니다. assembly 끝에 {"type":"intro"} 를 추가하세요.', file=sys.stderr)
 
     # ---- resolve photo path: prefetch & resize ----
     def photo_path(fn):
