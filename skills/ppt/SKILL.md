@@ -239,8 +239,8 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/ppt/lib/validate.py" "<날짜>/<날짜>_�
 ### 7. 산출물 보고 + 미리보기
 - 경로 보고. 핵심 슬라이드(표지/사진그리드/알약/끝) `qlmanage -t -s 1200` 로 미리보기 생성해 제시.
 - **PPTX만.** PDF는 만들지 않는다(내부 검증용 렌더링 PDF 는 산출물이 아님 — 보고 후 정리 대상).
-- **휴대폰 전달**: 대화 첨부(SendUserFile)는 30MB 한도라 완성본(보통 30MB+)은 못 보낸다.
-  macOS 면 iCloud Drive `자운시 PPT/` 폴더(`~/Library/Mobile Documents/com~apple~CloudDocs/자운시 PPT/`)에
+- **휴대폰 전달(선택)**: 대화 첨부(SendUserFile)는 30MB 한도라 완성본(보통 30MB+)은 못 보낸다.
+  자동으로 복사하지 말고 필요한지 한 줄로 먼저 묻는다. 원하면 macOS 에서 iCloud Drive `자운시 PPT/` 폴더(`~/Library/Mobile Documents/com~apple~CloudDocs/자운시 PPT/`)에
   복사하고 `cmp` 로 원본과 같은지 확인한다 — 휴대폰 '파일' 앱 → iCloud Drive → 자운시 PPT 에서 받는다.
   재빌드하면 다시 복사해 덮어쓴다.
 
