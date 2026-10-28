@@ -18,6 +18,7 @@ png폴더의 *.png 를 파일명 정렬 순으로 발표 순서에 매핑한다
 (pdftoppm 의 pg-01.png .. pg-NN.png 가 그대로 발표 순서).
 장수가 슬라이드 수와 다르면 에러로 중단한다.
 캔버스 크기(sldSz)는 원본 presentation.xml 에서 자동으로 읽는다.
+원본이 PDF 뿐이면 make_skeleton.py 로 빈 골격 pptx(캔버스는 마스터와 동일)를 만들어 <원본.pptx> 자리에 쓴다.
 """
 import zipfile, re, sys, glob, os, posixpath
 

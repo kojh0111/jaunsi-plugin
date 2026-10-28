@@ -52,6 +52,8 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/ppt/lib/preflight.py" [--date <YYMMDD>]
 - 날짜 폴더에 카톡 export 가 **zip/폴더째로** 들어와 있으면 자동 분류한다
   (txt → 직속, 이미지 → `images/`, pptx → `ppts/`; 결과는 JSON 의 `normalized` 에 표시).
   사용자에게는 "압축 풀 필요 없이 통째로 넣어도 된다"고 안내.
+- `ppts/` 에 **pptx 대신 PDF** 가 들어오면(카톡에 pdf 광고가 올라온 경우) preflight 는 외부 PPT 0개로 세지만
+  "외부 PPT 없음"으로 넘기지 말고 4.5절의 **PDF 경로**로 이미지판을 만들어 병합한다.
 
 **누락이 있으면 멈추지 말고 "넣었음" 게이트(AskUserQuestion)로 대기할 것.**
 스킬이 폴더를 이미 만들어 뒀으니, 사용자는 그 폴더에 파일을 채우기만 하면 된다.
@@ -152,6 +154,16 @@ intro(2번) 슬라이드의 "정리정돈 담당 청년부"는 **매월 바뀐�
 ### 4.5 외부 PPT 이미지판 변환 (캔버스 다르고 텍스트 있을 때)
 
 원본을 픽셀 그대로 보존하면서 병합하는 경로. 편집 가능성만 포기한다(발표용이므로 무해).
+
+**원본이 PDF 일 때**(카톡에 pdf 광고만 올라온 경우): 1단계를 건너뛰고 2단계(`pdftoppm`)부터 간다.
+원본 pptx 골격이 없으므로 4단계 전에 `make_skeleton.py` 로 **빈 N장 골격**을 만든다:
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/ppt/lib/make_skeleton.py" "<골격.pptx>" "master/<마스터>.pptx" <장수> <마스터 cx> <마스터 cy>
+```
+캔버스(cx/cy)는 마스터와 똑같이 준다(`unzip -p "master/<마스터>.pptx" ppt/presentation.xml | grep -o '<p:sldSz[^/]*/>'`) —
+그래야 축척 없이 풀블리드로 병합된다. 4단계의 `<원본.pptx>` 자리에 이 골격을 넣고, 병합 후 골격 파일은
+**삭제**한다(`ppts/` 에 남기면 preflight 가 외부 PPT 로 센다). PowerPoint AppleScript 로 빈 골격을 만드는 방법은
+실패한다(`page setup` -10006, `save as presentation` 이 구형 .ppt 로 저장) — 쓰지 말 것.
 
 1. **PowerPoint(AppleScript)로 PDF 저장** — 임베드 폰트를 그대로 렌더링한다(로컬 폰트 설치 불필요):
    ```applescript
